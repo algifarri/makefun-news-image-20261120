@@ -284,60 +284,76 @@ def scene_gta(x, y, w, h):
 
 def scene_iran(x, y, w, h):
     """Air Force One in flight beside a calendar page marked 2027."""
-    fill_rect(x, y, w, h, (178, 208, 234))
-    # clouds
-    for cx, cy, r in ((x + 60, y + 16, 12), (x + 78, y + 22, 9),
-                      (x + w - 70, y + 14, 11), (x + w - 52, y + 20, 8)):
+    fill_rect(x, y, w, h, (168, 200, 230))
+    # a long white contrail curving behind the plane
+    for i in range(9):
+        cx = x + 16 + i * 14
+        cy = y + 58 - i * 2
+        disc(cx, cy, 5 + i, WHITE)
+    # clouds drifting past
+    for cx, cy, r in ((x + 66, y + 12, 11), (x + 84, y + 18, 8),
+                      (x + w - 64, y + 10, 10), (x + w - 46, y + 17, 7)):
         disc(cx, cy, r, WHITE)
-    # the plane, nose right
-    px, py = x + 40, y + 44
-    fill_rect(px, py, 150, 14, WHITE)
-    poly([(px + 150, py), (px + 182, py + 7), (px + 150, py + 14)], WHITE)
-    poly([(px + 18, py), (px + 34, py - 16), (px + 46, py)], BLUE)
-    poly([(px + 84, py + 14), (px + 104, py + 30), (px + 118, py + 14)],
-         (210, 220, 235))
-    fill_rect(px, py + 10, 150, 4, BLUE)
-    for wx in range(8):
-        fill_rect(px + 14 + wx * 17, py + 3, 8, 5, SKY_DEEP)
-    # calendar page at bottom right
-    cal_x, cal_y = x + w - 148, y + h - 62
-    fill_rect(cal_x, cal_y, 128, 54, WHITE)
-    frame(cal_x, cal_y, 128, 54, INK, 2)
-    fill_rect(cal_x, cal_y, 128, 16, RED)
-    draw_text("2027", cal_x + 44, cal_y + 22, 2, INK, bold=True)
-    draw_text("JAN 1", cal_x + 40, cal_y + 38, 2, RED, bold=True)
-    # a clock face at bottom left, hands pointing to next year
-    cx, cy = x + 52, y + h - 30
-    disc(cx, cy, 20, WHITE)
-    stroke(cx, cy, cx, cy - 15, 3, INK)
-    stroke(cx, cy, cx + 11, cy - 8, 3, INK)
+    # the plane, nose right, with two engines under the wing
+    px, py = x + 52, y + 40
+    fill_rect(px, py, 148, 13, WHITE)
+    poly([(px + 148, py), (px + 180, py + 6), (px + 148, py + 13)], WHITE)
+    poly([(px + 16, py), (px + 32, py - 15), (px + 44, py)], BLUE)
+    poly([(px + 82, py + 13), (px + 100, py + 28), (px + 116, py + 13)],
+         (204, 216, 232))
+    fill_rect(px, py + 9, 148, 4, BLUE)
+    for wx in range(7):
+        fill_rect(px + 16 + wx * 19, py + 3, 9, 5, SKY_DEEP)
+    fill_rect(px + 56, py + 16, 14, 7, (120, 130, 140))
+    fill_rect(px + 128, py + 16, 14, 7, (120, 130, 140))
+    # calendar page at bottom right, torn off at the new year
+    cal_x, cal_y = x + w - 150, y + h - 60
+    fill_rect(cal_x, cal_y, 130, 52, WHITE)
+    frame(cal_x, cal_y, 130, 52, INK, 2)
+    fill_rect(cal_x, cal_y, 130, 15, RED)
+    draw_text("2027", cal_x + 46, cal_y + 21, 2, INK, bold=True)
+    draw_text("JAN 1", cal_x + 42, cal_y + 37, 2, RED, bold=True)
+    # a pocket watch at bottom left, hands pointing to next year
+    cx, cy = x + 50, y + h - 28
+    disc(cx, cy, 19, WHITE)
+    disc(cx, cy, 19, WHITE)
+    stroke(cx, cy, cx, cy - 14, 3, INK)
+    stroke(cx, cy, cx + 10, cy - 7, 3, INK)
     disc(cx, cy, 3, RED)
+    stroke(cx + 14, cy + 14, cx + 22, cy + 20, 2, GOLD)
 
 
 def scene_cyclone(x, y, w, h):
     """A cyclone swirl seen from above, over a storm-tossed coast."""
     fill_rect(x, y, w, h, STORM)
-    # the spiral: concentric rings, storm-grey and white
-    cx, cy = x + w // 2, y + h // 2 - 6
-    for r, c in ((40, STORM_LT), (33, WHITE), (26, STORM),
-                 (19, STORM_LT), (12, WHITE), (5, STORM)):
-        disc(cx, cy, r, c)
-    disc(cx, cy, 4, (240, 220, 180))  # the calm eye
+    # the spiral: arcs winding inwards, storm-grey and white
+    cx, cy = x + w // 2 + 40, y + h // 2 - 4
+    for r, c in ((38, STORM_LT), (30, WHITE), (23, STORM),
+                 (16, STORM_LT), (10, WHITE)):
+        for a in range(0, 360, 8):
+            ang = math.radians(a)
+            px = cx + int(r * math.cos(ang))
+            py = cy + int(r * math.sin(ang) * 0.8)
+            disc(px, py, 3, c)
+    disc(cx, cy, 5, (240, 220, 180))  # the calm eye
     # slanting rain across the whole panel
-    for i in range(14):
-        rx = x + 12 + (i * 31) % (w - 20)
-        ry = y + 6 + (i * 17) % (h - 30)
-        stroke(rx, ry, rx - 8, ry + 12, 2, (200, 214, 230))
+    for i in range(16):
+        rx = x + 10 + (i * 29) % (w - 18)
+        ry = y + 4 + (i * 19) % (h - 28)
+        stroke(rx, ry, rx - 9, ry + 13, 2, (205, 218, 232))
     # waves along the bottom
-    sea_y = y + h - 16
+    sea_y = y + h - 15
     fill_rect(x, sea_y, w, y + h - sea_y, SEA_DEEP)
     for i in range(6):
-        stroke(x + 8 + i * 70, sea_y + 6, x + 48 + i * 70, sea_y + 6, 3,
+        stroke(x + 10 + i * 72, sea_y + 5, x + 50 + i * 72, sea_y + 5, 3,
                WHITE)
+        stroke(x + 30 + i * 72, sea_y + 10, x + 62 + i * 72, sea_y + 10, 2,
+               (180, 205, 230))
     # a small coastal house with a roof, braced against the storm
-    hx, hy = x + 26, sea_y - 26
-    fill_rect(hx, hy, 34, 26, (210, 190, 160))
-    poly([(hx - 4, hy), (hx + 17, hy - 14), (hx + 38, hy)], RED)
+    hx, hy = x + 24, sea_y - 24
+    fill_rect(hx, hy, 32, 24, (212, 192, 162))
+    poly([(hx - 4, hy), (hx + 16, hy - 13), (hx + 36, hy)], RED)
+    fill_rect(hx + 12, hy + 10, 8, 14, (90, 70, 50))
 
 
 def scene_tower(x, y, w, h):
@@ -398,12 +414,14 @@ def scene_market(x, y, w, h):
 
 # ------------------------------------------------------------------ layout
 def panel(x, y, w, h, scene, head_lines, detail_lines, accent):
+    """One story panel: a scene, a bold headline, and a detail line."""
     global CLIP
     fill_rect(x, y, w, h, PAPER)
     frame(x, y, w, h, INK, 3)
-    fill_rect(x, y, w, 8, accent)
+    fill_rect(x, y, w, 10, accent)
+    fill_rect(x, y + 10, w, 2, INK)
     CLIP = (x + 3, y + 3, x + w - 3, y + h - 3)
-    scene(x + 10, y + 14, w - 20, 84)
+    scene(x + 10, y + 18, w - 20, 80)
     CLIP = None
     ty = y + 106
     for ln in head_lines:
@@ -432,10 +450,11 @@ def compose():
     CLIP = (hx + 3, hy + 3, hx + hw - 3, hy + hh - 3)
     scene_gta(hx + 8, hy + 8, hw - 16, 150)
     CLIP = None
-    text_c("GTA VI: $1.84BN IN A DAY", W // 2, hy + 168, 4, INK, bold=True)
-    text_c("19M COPIES SOLD, ESTIMATES SAY;", W // 2, hy + 206, 3,
+    fill_rect(hx + 60, hy + 162, hw - 120, 3, GOLD)
+    text_c("GTA VI: $1.84BN IN A DAY", W // 2, hy + 172, 4, INK, bold=True)
+    text_c("19M COPIES SOLD, ESTIMATES SAY;", W // 2, hy + 210, 3,
            (70, 64, 54))
-    text_c("7.9M WATCH AT ONCE AS THE INTERNET BREAKS", W // 2, hy + 236, 3,
+    text_c("7.9M WATCH AT ONCE AS THE INTERNET BREAKS", W // 2, hy + 238, 3,
            (70, 64, 54))
 
     # ---- four panels, two by two
@@ -456,13 +475,13 @@ def compose():
           ["ANTHROPIC SOARS", "ON MARKET DEBUT"],
           ["AI MAKER'S BLOCKBUSTER", "FIRST DAY OF TRADING"], GREEN)
 
-    # ---- ticker
+    # ---- ticker: the rest of the day in three lines
     ty = py2 + ph + 12
     fill_rect(28, ty, W - 56, H - ty - 12, TICKER_BG)
     text_c("UK TO SEND 1,000+ LONG-RANGE DRONES TO UKRAINE",
-           W // 2, ty + 8, 3, TICKER_FG, bold=True)
-    text_c("FIJI DECLARES DROUGHT DISASTER", W // 2, ty + 36, 3, TICKER_FG)
-    text_c("S. KOREA COURT SENDS EX-PM HAN CASE BACK", W // 2, ty + 62, 2,
+           W // 2, ty + 7, 3, TICKER_FG, bold=True)
+    text_c("FIJI DECLARES DROUGHT DISASTER", W // 2, ty + 34, 3, TICKER_FG)
+    text_c("S. KOREA COURT SENDS EX-PM HAN CASE BACK", W // 2, ty + 60, 2,
            (196, 188, 168))
 
 
