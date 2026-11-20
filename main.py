@@ -246,18 +246,18 @@ def scene_gta(x, y, w, h):
     fill_rect(x, y + h // 2, w, h // 4, NEON_ORANGE)
     fill_rect(x, y + (3 * h) // 4, w, h - (3 * h) // 4, (40, 20, 60))
     # the big setting sun, high enough to clear the skyline
-    disc(x + int(w * 0.68), y + 34, 34, FIRE_CORE)
-    disc(x + int(w * 0.68), y + 34, 23, (255, 220, 120))
+    disc(x + int(w * 0.62), y + 30, 32, FIRE_CORE)
+    disc(x + int(w * 0.62), y + 30, 21, (255, 220, 120))
     # skyline silhouettes, two rows of towers
-    for i, bh in enumerate((58, 84, 66, 96, 74, 88, 60, 78)):
-        bx = x + 14 + i * (w - 28) // 8
-        bw = (w - 28) // 8 - 6
+    for i, bh in enumerate((64, 78, 92, 70, 98, 80, 62, 86)):
+        bx = x + 12 + i * (w - 24) // 8
+        bw = (w - 24) // 8 - 8
         fill_rect(bx, y + (3 * h) // 4 - bh, bw, bh, (30, 16, 48))
-        for wy in range(6):
+        for wy in range(5):
             for wx in range(3):
-                if (i + wy + wx) % 3 == 0:
-                    fill_rect(bx + 4 + wx * 8, y + (3 * h) // 4 - bh + 8 + wy * 12,
-                              4, 5, GOLD)
+                if (i * 2 + wy + wx) % 3 == 0:
+                    fill_rect(bx + 5 + wx * 9, y + (3 * h) // 4 - bh + 10 + wy * 13,
+                              4, 6, GOLD)
     # water strip with a bright reflection under the sun
     sea_y = y + (3 * h) // 4
     fill_rect(x, sea_y, w, y + h - sea_y, SEA_DEEP)
@@ -358,29 +358,29 @@ def scene_cyclone(x, y, w, h):
 
 def scene_tower(x, y, w, h):
     """The PIF Tower in Riyadh, smoke curling from damaged floors."""
-    fill_rect(x, y, w, h, (238, 196, 148))  # dusk sky
-    disc(x + w - 46, y + 18, 12, FIRE_CORE)  # low sun
+    fill_rect(x, y, w, h, (236, 192, 146))  # dusk sky
+    disc(x + w - 44, y + 20, 13, FIRE_CORE)  # low sun
     # neighbouring low blocks
-    fill_rect(x + 14, y + h - 34, 52, 34, (120, 110, 100))
-    fill_rect(x + w - 66, y + h - 26, 52, 26, (120, 110, 100))
-    # the tower itself, tapering
-    tx = x + w // 2 - 30
-    poly([(tx, y + h), (tx + 8, y + 6), (tx + 52, y + 6), (tx + 60, y + h)],
-         (96, 142, 190))
-    # window grid
-    for row in range(9):
-        wy = y + 12 + row * 7
+    fill_rect(x + 12, y + h - 32, 54, 32, (118, 108, 98))
+    fill_rect(x + w - 66, y + h - 24, 54, 24, (118, 108, 98))
+    # the tower itself, tapering towards the top
+    tx = x + w // 2 - 32
+    poly([(tx, y + h), (tx + 9, y + 4), (tx + 55, y + 4), (tx + 64, y + h)],
+         (94, 140, 188))
+    # window grid, lit in the dusk
+    for row in range(10):
+        wy = y + 10 + row * 7
         for col in range(5):
-            wx = tx + 12 + col * 9
-            fill_rect(wx, wy, 5, 4, (210, 226, 240))
-    # damaged floors: broken windows and smoke
-    for row in (3, 4):
-        wy = y + 12 + row * 7
+            wx = tx + 13 + col * 10
+            fill_rect(wx, wy, 6, 4, (208, 224, 238))
+    # damaged floors: shattered windows and smoke above them
+    for row in (3, 4, 5):
+        wy = y + 10 + row * 7
         for col in range(5):
-            fill_rect(tx + 12 + col * 9, wy, 5, 4, (40, 30, 26))
-    disc(tx + 20, y + 8, 9, SMOKE_LT)
-    disc(tx + 34, y + 2, 7, SMOKE)
-    disc(tx + 46, y + 10, 6, SMOKE_LT)
+            fill_rect(tx + 13 + col * 10, wy, 6, 4, (38, 28, 24))
+    disc(tx + 22, y + 6, 10, SMOKE_LT)
+    disc(tx + 38, y + 1, 8, SMOKE)
+    disc(tx + 50, y + 8, 7, SMOKE_LT)
     # ground line
     fill_rect(x, y + h - 4, w, 4, INK)
 
@@ -392,16 +392,16 @@ def scene_market(x, y, w, h):
     for gy in range(3):
         fill_rect(x + 8, y + 14 + gy * 22, w - 16, 1, (40, 70, 56))
     # candlesticks rising left to right
-    for i, (bh, top) in enumerate(((10, 52), (16, 44), (12, 40), (22, 30),
-                                   (18, 24), (26, 14))):
-        bx = x + 22 + i * 62
-        fill_rect(bx, y + top, 26, bh, GREEN if i % 2 == 0 else (90, 200, 130))
-        stroke(bx + 13, y + top - 6, bx + 13, y + top + bh + 6, 2,
-               GREEN if i % 2 == 0 else (90, 200, 130))
+    for i, (bh, top) in enumerate(((12, 50), (18, 42), (14, 38), (24, 28),
+                                   (20, 22), (28, 12))):
+        bx = x + 24 + i * 60
+        fill_rect(bx, y + top, 24, bh, GREEN if i % 2 == 0 else (92, 202, 132))
+        stroke(bx + 12, y + top - 7, bx + 12, y + top + bh + 7, 2,
+               GREEN if i % 2 == 0 else (92, 202, 132))
     # the climbing line with an arrowhead
-    pts = [(x + 20, y + 62), (x + 82, y + 54), (x + 144, y + 56),
-           (x + 206, y + 40), (x + 268, y + 44), (x + 330, y + 26),
-           (x + 392, y + 30), (x + w - 24, y + 10)]
+    pts = [(x + 22, y + 60), (x + 84, y + 52), (x + 146, y + 54),
+           (x + 208, y + 38), (x + 270, y + 42), (x + 332, y + 24),
+           (x + 394, y + 28), (x + w - 26, y + 8)]
     for a, b in zip(pts, pts[1:]):
         stroke(a[0], a[1], b[0], b[1], 4, (120, 230, 160))
     ax, ay = pts[-1]
