@@ -1,0 +1,499 @@
+#!/usr/bin/env python3
+"""Draw one newspaper-style poster that sums up the world news of
+Friday 20 November 2026, and write it to /output/entry.png.
+
+Pure standard library: a small RGB framebuffer, a hand-drawn 5x7 bitmap
+font, flat-shaded editorial scenes for each story, and a manual PNG
+encoder (zlib + struct). No network, no randomness: two runs of this
+program write byte-identical files.
+
+The day's stories, as reported on 20 November 2026:
+  * HERO - Grand Theft Auto VI smashes launch records: Sensor Tower
+    estimates 19.05 million copies and about $1.84 billion by launch
+    day (Reuters / GameSpot, Nov 19), streams peak at 7.91 million
+    concurrent viewers and 125 million hours watched in 24 hours,
+    and internet exchange traffic hits a record 33.03 Tbps (DE-CIX).
+  * Donald Trump says he is in no rush on Iran: no decision on new
+    strikes until after January 1, "we will see what happens",
+    told to Reuters, Axios and Fox News on his flight home from
+    China (Reuters, Nov 19-20).
+  * Cyclone Akvan makes landfall on India's east coast at noon on
+    Friday 20 November, winds 90-100 kmph gusting to 110, with
+    more than 100,000 people evacuated in Odisha (IMD / Jagran Josh).
+  * A Houthi missile damages Riyadh's PIF Tower, the 80-storey
+    headquarters of Saudi Arabia's sovereign wealth fund: windows
+    blown out across seven to eight floors, no injuries, the second
+    strike on the financial district in eleven days (Reuters / AFP).
+  * Anthropic surges in its market debut, the AI maker's blockbuster
+    first day of trading after pricing its IPO (Reuters, Nov 19).
+  * Ticker: the UK to send Ukraine 1,000+ long-range strike drones;
+    Fiji declares a national state of disaster over drought;
+    South Korea's top court sends ex-PM Han Duck-soo's case back.
+"""
+
+import math
+import os
+import struct
+import zlib
+
+W = 1024
+H = 1024
+
+# ------------------------------------------------------------------ colours
+PAPER = (247, 242, 228)
+INK = (24, 24, 28)
+FAINT = (120, 112, 96)
+RULE = (24, 24, 28)
+SKY = (168, 205, 232)
+SKY_DEEP = (110, 160, 205)
+SEA = (38, 96, 150)
+SEA_DEEP = (26, 70, 116)
+SAND = (232, 205, 150)
+LAND = (106, 142, 74)
+FIRE = (238, 110, 32)
+FIRE_CORE = (250, 196, 60)
+SMOKE = (105, 105, 110)
+SMOKE_LT = (165, 165, 170)
+RED = (178, 34, 44)
+BLUE = (40, 70, 160)
+GOLD = (214, 164, 40)
+WHITE = (250, 250, 248)
+TICKER_BG = (24, 24, 28)
+TICKER_FG = (247, 242, 228)
+SPACE = (10, 12, 34)
+SPACE_LT = (32, 40, 80)
+NEON_PINK = (255, 80, 160)
+NEON_ORANGE = (255, 140, 40)
+NEON_PURPLE = (120, 60, 180)
+VICE_TEAL = (40, 190, 180)
+STORM = (52, 72, 96)
+STORM_LT = (120, 140, 168)
+GREEN = (34, 160, 90)
+
+FB = bytearray(W * H * 3)
+CLIP = None  # (x0, y0, x1, y1) while a scene is painting, else None
+
+
+def put(x, y, c):
+    if CLIP is not None and not (CLIP[0] <= x < CLIP[2] and CLIP[1] <= y < CLIP[3]):
+        return
+    if 0 <= x < W and 0 <= y < H:
+        i = (y * W + x) * 3
+        FB[i] = c[0]
+        FB[i + 1] = c[1]
+        FB[i + 2] = c[2]
+
+
+def fill_rect(x, y, w, h, c):
+    for yy in range(y, y + h):
+        for xx in range(x, x + w):
+            put(xx, yy, c)
+
+
+def disc(cx, cy, r, c):
+    r2 = r * r
+    for yy in range(cy - r, cy + r + 1):
+        for xx in range(cx - r, cx + r + 1):
+            if (xx - cx) * (xx - cx) + (yy - cy) * (yy - cy) <= r2:
+                put(xx, yy, c)
+
+
+def half_disc_up(cx, cy, r, c):
+    """Filled dome: the top half of a disc sitting on the line y=cy."""
+    r2 = r * r
+    for yy in range(cy - r, cy + 1):
+        for xx in range(cx - r, cx + r + 1):
+            if (xx - cx) * (xx - cx) + (yy - cy) * (yy - cy) <= r2:
+                put(xx, yy, c)
+
+
+def stroke(x0, y0, x1, y1, wdt, c):
+    """Thick line: walk the segment and stamp a small disc at each step."""
+    steps = max(abs(x1 - x0), abs(y1 - y0), 1)
+    rad = max(wdt // 2, 0)
+    for i in range(steps + 1):
+        x = x0 + (x1 - x0) * i // steps
+        y = y0 + (y1 - y0) * i // steps
+        if rad == 0:
+            put(x, y, c)
+        else:
+            disc(x, y, rad, c)
+
+
+def poly(points, c):
+    """Scanline fill of a simple polygon."""
+    ys = [p[1] for p in points]
+    n = len(points)
+    for y in range(min(ys), max(ys) + 1):
+        hits = []
+        for i in range(n):
+            xa, ya = points[i]
+            xb, yb = points[(i + 1) % n]
+            if ya == yb:
+                continue
+            if (ya <= y < yb) or (yb <= y < ya):
+                hits.append(xa + (y - ya) * (xb - xa) // (yb - ya))
+        hits.sort()
+        for i in range(0, len(hits) - 1, 2):
+            for x in range(hits[i], hits[i + 1] + 1):
+                put(x, y, c)
+
+
+def frame(x, y, w, h, c, t=3):
+    fill_rect(x, y, w, t, c)
+    fill_rect(x, y + h - t, w, t, c)
+    fill_rect(x, y, t, h, c)
+    fill_rect(x + w - t, y, t, h, c)
+
+
+# ------------------------------------------------------------------ font
+# 5x7 bitmap glyphs, seven rows of five pixels, '#' lit. Uppercase only:
+# the poster speaks in headlines.
+FONT = {
+    "A": (".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"),
+    "B": ("####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."),
+    "C": (".####", "#....", "#....", "#....", "#....", "#....", ".####"),
+    "D": ("####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."),
+    "E": ("#####", "#....", "#....", "####.", "#....", "#....", "#####"),
+    "F": ("#####", "#....", "#....", "####.", "#....", "#....", "#...."),
+    "G": (".####", "#....", "#....", "#.###", "#...#", "#...#", ".###."),
+    "H": ("#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"),
+    "I": ("#####", "..#..", "..#..", "..#..", "..#..", "..#..", "#####"),
+    "J": ("..###", "...#.", "...#.", "...#.", "...#.", "#..#.", ".##.."),
+    "K": ("#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"),
+    "L": ("#....", "#....", "#....", "#....", "#....", "#....", "#####"),
+    "M": ("#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"),
+    "N": ("#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"),
+    "O": (".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."),
+    "P": ("####.", "#...#", "#...#", "####.", "#....", "#....", "#...."),
+    "Q": (".###.", "#...#", "#...#", "#...#", "#.#.#", "#..#.", ".##.#"),
+    "R": ("####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"),
+    "S": (".####", "#....", "#....", ".###.", "....#", "....#", "####."),
+    "T": ("#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."),
+    "U": ("#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."),
+    "V": ("#...#", "#...#", "#...#", "#...#", "#...#", ".#.#.", "..#.."),
+    "W": ("#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"),
+    "X": ("#...#", ".#.#.", "..#..", "..#..", "..#..", ".#.#.", "#...#"),
+    "Y": ("#...#", "#...#", ".#.#.", "..#..", "..#..", "..#..", "..#.."),
+    "Z": ("#####", "....#", "...#.", "..#..", ".#...", "#....", "#####"),
+    "0": (".###.", "#..##", "#.#.#", "##..#", "#...#", "#...#", ".###."),
+    "1": ("..#..", ".##..", "..#..", "..#..", "..#..", "..#..", "#####"),
+    "2": (".###.", "#...#", "....#", "..##.", ".#...", "#....", "#####"),
+    "3": ("####.", "....#", "....#", ".###.", "....#", "....#", "####."),
+    "4": ("...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."),
+    "5": ("#####", "#....", "####.", "....#", "....#", "#...#", ".###."),
+    "6": (".###.", "#....", "#....", "####.", "#...#", "#...#", ".###."),
+    "7": ("#####", "....#", "...#.", "..#..", "..#..", "..#..", "..#.."),
+    "8": (".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."),
+    "9": (".###.", "#...#", "#...#", ".####", "....#", "....#", ".###."),
+    " ": (".....", ".....", ".....", ".....", ".....", ".....", "....."),
+    ".": (".....", ".....", ".....", ".....", ".....", ".##..", ".##.."),
+    ",": (".....", ".....", ".....", ".....", ".##..", ".##..", ".#..."),
+    ";": (".....", ".##..", ".##..", ".....", ".##..", ".##..", ".#..."),
+    ":": (".....", ".##..", ".##..", ".....", ".##..", ".##..", "....."),
+    "-": (".....", ".....", ".....", "#####", ".....", ".....", "....."),
+    "'": (".##..", ".##..", ".#...", ".....", ".....", ".....", "....."),
+    "!": ("..#..", "..#..", "..#..", "..#..", "..#..", ".....", "..#.."),
+    "?": (".###.", "#...#", "....#", "..##.", "..#..", ".....", "..#.."),
+    "/": ("....#", "....#", "...#.", "..#..", ".#...", "#....", "#...."),
+    "(": ("..##.", ".#...", "#....", "#....", "#....", ".#...", "..##."),
+    ")": (".##..", "...#.", "....#", "....#", "....#", "...#.", ".##.."),
+    "+": (".....", "..#..", "..#..", "#####", "..#..", "..#..", "....."),
+    "&": (".##..", "#..#.", "#.#..", ".#...", "#.#.#", "#..#.", ".##.#"),
+    "$": ("..#..", ".####", "#.#.#", ".###.", "..#.#", "####.", "..#.."),
+    "%": ("##..#", "##.#.", "...#.", "..#..", ".#...", "#.##.", "#..##"),
+    "€": (".####", "#....", "####.", "#....", "####.", "#....", ".####"),
+}
+
+
+def text_w(s, scale):
+    return len(s) * 6 * scale - scale
+
+
+def draw_text(s, x, y, scale, c, bold=False):
+    """Draw string s with its top-left corner at (x, y)."""
+    cx = x
+    for ch in s.upper():
+        glyph = FONT.get(ch, FONT[" "])
+        for row in range(7):
+            bits = glyph[row]
+            for col in range(5):
+                if bits[col] == "#":
+                    fill_rect(cx + col * scale, y + row * scale,
+                              scale, scale, c)
+                    if bold:
+                        fill_rect(cx + col * scale + scale // 2,
+                                  y + row * scale, scale, scale, c)
+        cx += 6 * scale
+    return cx
+
+
+def text_c(s, cx, y, scale, c, bold=False):
+    """Draw string s centred on cx."""
+    return draw_text(s, cx - text_w(s, scale) // 2, y, scale, c, bold)
+
+
+def text_l(s, x, y, scale, c, bold=False):
+    return draw_text(s, x, y, scale, c, bold)
+
+
+# ------------------------------------------------------------------ scenes
+def scene_gta(x, y, w, h):
+    """Vice City at sunset: a neon sun over a waterfront skyline."""
+    # sunset sky in flat bands
+    fill_rect(x, y, w, h // 4, NEON_PURPLE)
+    fill_rect(x, y + h // 4, w, h // 4, NEON_PINK)
+    fill_rect(x, y + h // 2, w, h // 4, NEON_ORANGE)
+    fill_rect(x, y + (3 * h) // 4, w, h - (3 * h) // 4, (40, 20, 60))
+    # the big setting sun, high enough to clear the skyline
+    disc(x + int(w * 0.68), y + 34, 34, FIRE_CORE)
+    disc(x + int(w * 0.68), y + 34, 23, (255, 220, 120))
+    # skyline silhouettes, two rows of towers
+    for i, bh in enumerate((58, 84, 66, 96, 74, 88, 60, 78)):
+        bx = x + 14 + i * (w - 28) // 8
+        bw = (w - 28) // 8 - 6
+        fill_rect(bx, y + (3 * h) // 4 - bh, bw, bh, (30, 16, 48))
+        for wy in range(6):
+            for wx in range(3):
+                if (i + wy + wx) % 3 == 0:
+                    fill_rect(bx + 4 + wx * 8, y + (3 * h) // 4 - bh + 8 + wy * 12,
+                              4, 5, GOLD)
+    # water strip with a bright reflection under the sun
+    sea_y = y + (3 * h) // 4
+    fill_rect(x, sea_y, w, y + h - sea_y, SEA_DEEP)
+    for i in range(7):
+        stroke(x + w // 2 - 60 + i * 6, sea_y + 8 + i * 4,
+               x + w // 2 + 60 - i * 6, sea_y + 8 + i * 4, 3, FIRE_CORE)
+    # palm trees framing the scene
+    for px, flip in ((x + 26, 1), (x + w - 26, -1)):
+        stroke(px, sea_y - 4, px + 4 * flip, sea_y - 44, 4, (30, 60, 30))
+        for k in range(5):
+            ang = math.pi * (0.15 + k * 0.18)
+            ex = px + int(30 * math.cos(ang) * flip)
+            ey = sea_y - 44 - int(14 * math.sin(ang))
+            stroke(px + 4 * flip, sea_y - 44, ex, ey, 3, (34, 110, 60))
+    # a low sports car speeding along the waterfront road
+    cy = sea_y - 12
+    poly([(x + w // 2 - 52, cy), (x + w // 2 - 34, cy - 12),
+          (x + w // 2 + 18, cy - 12), (x + w // 2 + 52, cy)], NEON_PINK)
+    fill_rect(x + w // 2 - 52, cy, 104, 8, (20, 10, 30))
+    disc(x + w // 2 - 34, cy + 8, 7, INK)
+    disc(x + w // 2 + 34, cy + 8, 7, INK)
+    disc(x + w // 2 + 48, cy - 2, 3, GOLD)  # headlight
+
+
+def scene_iran(x, y, w, h):
+    """Air Force One in flight beside a calendar page marked 2027."""
+    fill_rect(x, y, w, h, (178, 208, 234))
+    # clouds
+    for cx, cy, r in ((x + 60, y + 16, 12), (x + 78, y + 22, 9),
+                      (x + w - 70, y + 14, 11), (x + w - 52, y + 20, 8)):
+        disc(cx, cy, r, WHITE)
+    # the plane, nose right
+    px, py = x + 40, y + 44
+    fill_rect(px, py, 150, 14, WHITE)
+    poly([(px + 150, py), (px + 182, py + 7), (px + 150, py + 14)], WHITE)
+    poly([(px + 18, py), (px + 34, py - 16), (px + 46, py)], BLUE)
+    poly([(px + 84, py + 14), (px + 104, py + 30), (px + 118, py + 14)],
+         (210, 220, 235))
+    fill_rect(px, py + 10, 150, 4, BLUE)
+    for wx in range(8):
+        fill_rect(px + 14 + wx * 17, py + 3, 8, 5, SKY_DEEP)
+    # calendar page at bottom right
+    cal_x, cal_y = x + w - 148, y + h - 62
+    fill_rect(cal_x, cal_y, 128, 54, WHITE)
+    frame(cal_x, cal_y, 128, 54, INK, 2)
+    fill_rect(cal_x, cal_y, 128, 16, RED)
+    draw_text("2027", cal_x + 44, cal_y + 22, 2, INK, bold=True)
+    draw_text("JAN 1", cal_x + 40, cal_y + 38, 2, RED, bold=True)
+    # a clock face at bottom left, hands pointing to next year
+    cx, cy = x + 52, y + h - 30
+    disc(cx, cy, 20, WHITE)
+    stroke(cx, cy, cx, cy - 15, 3, INK)
+    stroke(cx, cy, cx + 11, cy - 8, 3, INK)
+    disc(cx, cy, 3, RED)
+
+
+def scene_cyclone(x, y, w, h):
+    """A cyclone swirl seen from above, over a storm-tossed coast."""
+    fill_rect(x, y, w, h, STORM)
+    # the spiral: concentric rings, storm-grey and white
+    cx, cy = x + w // 2, y + h // 2 - 6
+    for r, c in ((40, STORM_LT), (33, WHITE), (26, STORM),
+                 (19, STORM_LT), (12, WHITE), (5, STORM)):
+        disc(cx, cy, r, c)
+    disc(cx, cy, 4, (240, 220, 180))  # the calm eye
+    # slanting rain across the whole panel
+    for i in range(14):
+        rx = x + 12 + (i * 31) % (w - 20)
+        ry = y + 6 + (i * 17) % (h - 30)
+        stroke(rx, ry, rx - 8, ry + 12, 2, (200, 214, 230))
+    # waves along the bottom
+    sea_y = y + h - 16
+    fill_rect(x, sea_y, w, y + h - sea_y, SEA_DEEP)
+    for i in range(6):
+        stroke(x + 8 + i * 70, sea_y + 6, x + 48 + i * 70, sea_y + 6, 3,
+               WHITE)
+    # a small coastal house with a roof, braced against the storm
+    hx, hy = x + 26, sea_y - 26
+    fill_rect(hx, hy, 34, 26, (210, 190, 160))
+    poly([(hx - 4, hy), (hx + 17, hy - 14), (hx + 38, hy)], RED)
+
+
+def scene_tower(x, y, w, h):
+    """The PIF Tower in Riyadh, smoke curling from damaged floors."""
+    fill_rect(x, y, w, h, (238, 196, 148))  # dusk sky
+    disc(x + w - 46, y + 18, 12, FIRE_CORE)  # low sun
+    # neighbouring low blocks
+    fill_rect(x + 14, y + h - 34, 52, 34, (120, 110, 100))
+    fill_rect(x + w - 66, y + h - 26, 52, 26, (120, 110, 100))
+    # the tower itself, tapering
+    tx = x + w // 2 - 30
+    poly([(tx, y + h), (tx + 8, y + 6), (tx + 52, y + 6), (tx + 60, y + h)],
+         (96, 142, 190))
+    # window grid
+    for row in range(9):
+        wy = y + 12 + row * 7
+        for col in range(5):
+            wx = tx + 12 + col * 9
+            fill_rect(wx, wy, 5, 4, (210, 226, 240))
+    # damaged floors: broken windows and smoke
+    for row in (3, 4):
+        wy = y + 12 + row * 7
+        for col in range(5):
+            fill_rect(tx + 12 + col * 9, wy, 5, 4, (40, 30, 26))
+    disc(tx + 20, y + 8, 9, SMOKE_LT)
+    disc(tx + 34, y + 2, 7, SMOKE)
+    disc(tx + 46, y + 10, 6, SMOKE_LT)
+    # ground line
+    fill_rect(x, y + h - 4, w, 4, INK)
+
+
+def scene_market(x, y, w, h):
+    """A stock chart climbing steeply on debut day."""
+    fill_rect(x, y, w, h, (16, 32, 26))
+    # faint grid
+    for gy in range(3):
+        fill_rect(x + 8, y + 14 + gy * 22, w - 16, 1, (40, 70, 56))
+    # candlesticks rising left to right
+    for i, (bh, top) in enumerate(((10, 52), (16, 44), (12, 40), (22, 30),
+                                   (18, 24), (26, 14))):
+        bx = x + 22 + i * 62
+        fill_rect(bx, y + top, 26, bh, GREEN if i % 2 == 0 else (90, 200, 130))
+        stroke(bx + 13, y + top - 6, bx + 13, y + top + bh + 6, 2,
+               GREEN if i % 2 == 0 else (90, 200, 130))
+    # the climbing line with an arrowhead
+    pts = [(x + 20, y + 62), (x + 82, y + 54), (x + 144, y + 56),
+           (x + 206, y + 40), (x + 268, y + 44), (x + 330, y + 26),
+           (x + 392, y + 30), (x + w - 24, y + 10)]
+    for a, b in zip(pts, pts[1:]):
+        stroke(a[0], a[1], b[0], b[1], 4, (120, 230, 160))
+    ax, ay = pts[-1]
+    poly([(ax, ay), (ax - 16, ay - 2), (ax - 8, ay + 10)], (120, 230, 160))
+    # opening bell at bottom left
+    bx, by = x + 30, y + h - 22
+    half_disc_up(bx, by, 12, GOLD)
+    fill_rect(bx - 14, by, 28, 3, GOLD)
+
+
+# ------------------------------------------------------------------ layout
+def panel(x, y, w, h, scene, head_lines, detail_lines, accent):
+    global CLIP
+    fill_rect(x, y, w, h, PAPER)
+    frame(x, y, w, h, INK, 3)
+    fill_rect(x, y, w, 8, accent)
+    CLIP = (x + 3, y + 3, x + w - 3, y + h - 3)
+    scene(x + 10, y + 14, w - 20, 84)
+    CLIP = None
+    ty = y + 106
+    for ln in head_lines:
+        text_c(ln, x + w // 2, ty, 3, INK, bold=True)
+        ty += 25
+    ty += 2
+    for ln in detail_lines:
+        text_c(ln, x + w // 2, ty, 2, (70, 64, 54))
+        ty += 17
+
+
+def compose():
+    global CLIP
+    fill_rect(0, 0, W, H, PAPER)
+
+    # ---- masthead
+    text_c("WORLD NEWS SUMMARY", W // 2, 18, 3, FAINT)
+    text_c("FRIDAY", W // 2, 46, 7, INK, bold=True)
+    text_c("20 NOVEMBER 2026", W // 2, 104, 9, RED, bold=True)
+    fill_rect(28, 176, W - 56, 5, RULE)
+    fill_rect(28, 186, W - 56, 2, RULE)
+
+    # ---- hero: GTA VI smashes launch records
+    hx, hy, hw, hh = 28, 196, W - 56, 284
+    frame(hx, hy, hw, hh, INK, 3)
+    CLIP = (hx + 3, hy + 3, hx + hw - 3, hy + hh - 3)
+    scene_gta(hx + 8, hy + 8, hw - 16, 150)
+    CLIP = None
+    text_c("GTA VI: $1.84BN IN A DAY", W // 2, hy + 168, 4, INK, bold=True)
+    text_c("19M COPIES SOLD, ESTIMATES SAY;", W // 2, hy + 206, 3,
+           (70, 64, 54))
+    text_c("7.9M WATCH AT ONCE AS THE INTERNET BREAKS", W // 2, hy + 236, 3,
+           (70, 64, 54))
+
+    # ---- four panels, two by two
+    pw = (W - 56 - 14) // 2
+    ph = 210
+    py1 = 492
+    py2 = py1 + ph + 10
+    panel(28, py1, pw, ph, scene_iran,
+          ["TRUMP: NO IRAN CALL", "UNTIL NEXT YEAR"],
+          ["WE WILL SEE WHAT HAPPENS", "AFTER JANUARY 1"], BLUE)
+    panel(28 + pw + 14, py1, pw, ph, scene_cyclone,
+          ["CYCLONE AKVAN HITS", "ODISHA COAST"],
+          ["LANDFALL AT NOON FRIDAY", "100,000+ EVACUATED"], STORM_LT)
+    panel(28, py2, pw, ph, scene_tower,
+          ["MISSILE HITS RIYADH", "SKYSCRAPER"],
+          ["PIF TOWER DAMAGED,", "NO INJURIES REPORTED"], GOLD)
+    panel(28 + pw + 14, py2, pw, ph, scene_market,
+          ["ANTHROPIC SOARS", "ON MARKET DEBUT"],
+          ["AI MAKER'S BLOCKBUSTER", "FIRST DAY OF TRADING"], GREEN)
+
+    # ---- ticker
+    ty = py2 + ph + 12
+    fill_rect(28, ty, W - 56, H - ty - 12, TICKER_BG)
+    text_c("UK TO SEND 1,000+ LONG-RANGE DRONES TO UKRAINE",
+           W // 2, ty + 8, 3, TICKER_FG, bold=True)
+    text_c("FIJI DECLARES DROUGHT DISASTER", W // 2, ty + 36, 3, TICKER_FG)
+    text_c("S. KOREA COURT SENDS EX-PM HAN CASE BACK", W // 2, ty + 62, 2,
+           (196, 188, 168))
+
+
+def png_bytes():
+    raw = bytearray()
+    row = W * 3
+    for y in range(H):
+        raw.append(0)
+        raw += FB[y * row:(y + 1) * row]
+
+    def chunk(tag, data):
+        out = struct.pack(">I", len(data)) + tag + data
+        out += struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        return out
+
+    ihdr = struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", ihdr)
+            + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+            + chunk(b"IEND", b""))
+
+
+def main():
+    compose()
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, "entry.png")
+    with open(path, "wb") as fh:
+        fh.write(png_bytes())
+    print("wrote", path)
+
+
+if __name__ == "__main__":
+    main()
