@@ -434,13 +434,20 @@ def panel(x, y, w, h, scene, head_lines, detail_lines, accent):
 
 
 def compose():
+    """Lay out the whole front page: masthead, hero, four panels, ticker."""
     global CLIP
     fill_rect(0, 0, W, H, PAPER)
 
-    # ---- masthead
-    text_c("WORLD NEWS SUMMARY", W // 2, 18, 3, FAINT)
-    text_c("FRIDAY", W // 2, 46, 7, INK, bold=True)
-    text_c("20 NOVEMBER 2026", W // 2, 104, 9, RED, bold=True)
+    # ---- masthead: name, weekday, date, double rule
+    masthead = [
+        ("WORLD NEWS SUMMARY", 3, FAINT, False),
+        ("FRIDAY", 7, INK, True),
+        ("20 NOVEMBER 2026", 9, RED, True),
+    ]
+    my = 18
+    for text, scale, colour, bold in masthead:
+        text_c(text, W // 2, my, scale, colour, bold=bold)
+        my += 28 if scale == 3 else (58 if scale == 7 else 62)
     fill_rect(28, 176, W - 56, 5, RULE)
     fill_rect(28, 186, W - 56, 2, RULE)
 
@@ -451,38 +458,53 @@ def compose():
     scene_gta(hx + 8, hy + 8, hw - 16, 150)
     CLIP = None
     fill_rect(hx + 60, hy + 162, hw - 120, 3, GOLD)
-    text_c("GTA VI: $1.84BN IN A DAY", W // 2, hy + 172, 4, INK, bold=True)
-    text_c("19M COPIES SOLD, ESTIMATES SAY;", W // 2, hy + 210, 3,
-           (70, 64, 54))
-    text_c("7.9M WATCH AT ONCE AS THE INTERNET BREAKS", W // 2, hy + 238, 3,
-           (70, 64, 54))
+    hero_lines = [
+        ("GTA VI: $1.84BN IN A DAY", 4, INK, True),
+        ("19M COPIES SOLD, ESTIMATES SAY;", 3, (70, 64, 54), False),
+        ("7.9M WATCH AT ONCE AS THE INTERNET BREAKS", 3, (70, 64, 54),
+         False),
+    ]
+    hyy = hy + 172
+    for text, scale, colour, bold in hero_lines:
+        text_c(text, W // 2, hyy, scale, colour, bold=bold)
+        hyy += 38 if scale == 4 else 28
 
-    # ---- four panels, two by two
+    # ---- four panels, two by two, from a data table
     pw = (W - 56 - 14) // 2
     ph = 210
     py1 = 492
     py2 = py1 + ph + 10
-    panel(28, py1, pw, ph, scene_iran,
-          ["TRUMP: NO IRAN CALL", "UNTIL NEXT YEAR"],
-          ["WE WILL SEE WHAT HAPPENS", "AFTER JANUARY 1"], BLUE)
-    panel(28 + pw + 14, py1, pw, ph, scene_cyclone,
-          ["CYCLONE AKVAN HITS", "ODISHA COAST"],
-          ["LANDFALL AT NOON FRIDAY", "100,000+ EVACUATED"], STORM_LT)
-    panel(28, py2, pw, ph, scene_tower,
-          ["MISSILE HITS RIYADH", "SKYSCRAPER"],
-          ["PIF TOWER DAMAGED,", "NO INJURIES REPORTED"], GOLD)
-    panel(28 + pw + 14, py2, pw, ph, scene_market,
-          ["ANTHROPIC SOARS", "ON MARKET DEBUT"],
-          ["AI MAKER'S BLOCKBUSTER", "FIRST DAY OF TRADING"], GREEN)
+    panels = [
+        (28, py1, scene_iran,
+         ["TRUMP: NO IRAN CALL", "UNTIL NEXT YEAR"],
+         ["WE WILL SEE WHAT HAPPENS", "AFTER JANUARY 1"], BLUE),
+        (28 + pw + 14, py1, scene_cyclone,
+         ["CYCLONE AKVAN HITS", "ODISHA COAST"],
+         ["LANDFALL AT NOON FRIDAY", "100,000+ EVACUATED"], STORM_LT),
+        (28, py2, scene_tower,
+         ["MISSILE HITS RIYADH", "SKYSCRAPER"],
+         ["PIF TOWER DAMAGED,", "NO INJURIES REPORTED"], GOLD),
+        (28 + pw + 14, py2, scene_market,
+         ["ANTHROPIC SOARS", "ON MARKET DEBUT"],
+         ["AI MAKER'S BLOCKBUSTER", "FIRST DAY OF TRADING"], GREEN),
+    ]
+    for px, py, scene, heads, details, accent in panels:
+        panel(px, py, pw, ph, scene, heads, details, accent)
 
     # ---- ticker: the rest of the day in three lines
     ty = py2 + ph + 12
     fill_rect(28, ty, W - 56, H - ty - 12, TICKER_BG)
-    text_c("UK TO SEND 1,000+ LONG-RANGE DRONES TO UKRAINE",
-           W // 2, ty + 7, 3, TICKER_FG, bold=True)
-    text_c("FIJI DECLARES DROUGHT DISASTER", W // 2, ty + 34, 3, TICKER_FG)
-    text_c("S. KOREA COURT SENDS EX-PM HAN CASE BACK", W // 2, ty + 60, 2,
-           (196, 188, 168))
+    ticker = [
+        ("UK TO SEND 1,000+ LONG-RANGE DRONES TO UKRAINE", 3, TICKER_FG,
+         True),
+        ("FIJI DECLARES DROUGHT DISASTER", 3, TICKER_FG, False),
+        ("S. KOREA COURT SENDS EX-PM HAN CASE BACK", 2, (196, 188, 168),
+         False),
+    ]
+    tyy = ty + 7
+    for text, scale, colour, bold in ticker:
+        text_c(text, W // 2, tyy, scale, colour, bold=bold)
+        tyy += 27 if scale == 3 else 26
 
 
 def png_bytes():
