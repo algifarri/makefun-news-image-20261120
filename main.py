@@ -501,10 +501,9 @@ def compose():
         ("S. KOREA COURT SENDS EX-PM HAN CASE BACK", 2, (196, 188, 168),
          False),
     ]
-    tyy = ty + 7
-    for text, scale, colour, bold in ticker:
-        text_c(text, W // 2, tyy, scale, colour, bold=bold)
-        tyy += 27 if scale == 3 else 26
+    tyy = [ty + 7, ty + 34, ty + 60]
+    for (text, scale, colour, bold), yy in zip(ticker, tyy):
+        text_c(text, W // 2, yy, scale, colour, bold=bold)
 
 
 def png_bytes():
